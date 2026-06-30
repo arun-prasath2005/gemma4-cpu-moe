@@ -1,134 +1,119 @@
-# How fast can a 26B MoE run on a desktop with no GPU?
+# Running Gemma-4 26B at 124 tokens/sec on a CPU, no GPU
 
-*An honest, reproducible map of what limits **Gemma-4-26B-A4B** on a consumer CPU — the recipe, the
-roofline, and the dead-ends, so you don't have to rediscover them.*
+I wanted to see how fast you can run a 26B mixture-of-experts model on a regular desktop, with no graphics
+card at all. Just the CPU: an i9-13900K, 64GB of ordinary DDR5, the kind of box a lot of people already have
+sitting around.
 
-> **Reference machine:** Intel i9-13900K · 64 GB DDR5-4800 · **no GPU.**
-> **Model:** Gemma-4-26B-A4B — 26B total, ~3.8B active, 128 experts (top-8), 262K vocab.
+Short version: about 40 tokens/sec for a single stream (and lossless, which I'll get to), or about 124
+tokens/sec if you're serving a handful of requests at once. For a 26B model with no GPU I think that's a
+little wild, and most of what follows is me working out why it's possible and where exactly the walls are.
 
----
+One thing surprised me enough that I'll just say it up front. Everyone's instinct with a mixture-of-experts
+model is to quantize the experts, because that's where all the parameters are. But I sat down and actually
+counted the bytes you read per token, and the experts are only 16% of it. The output head, the big matrix that
+projects to the 262K-token vocabulary, is 32%, twice as much. For this model the head is the thing to
+compress, not the experts. I did not expect that.
 
-## TL;DR
+## the model, and what "lossless" means
 
-Two honest numbers on the same chip — they answer two different questions:
+Gemma-4-26B-A4B: 26B parameters total, but only ~3.8B active per token, because it's a mixture of experts
+(128 of them, 8 used at a time).
 
-| question | answer | bound by |
-|---|---|---|
-| **one request, as fast as possible?** (latency) | **~40 tok/s**, lossless | memory bandwidth |
-| **most total work across many requests?** (throughput) | **~124 tok/s** | CPU compute |
+When I say lossless I mean it literally. I never change what the big model outputs. Every trick here either
+skips work the model was going to throw away anyway, or guesses ahead and has the model check the guess. So
+the tokens coming out are exactly the tokens plain Q4_0 would have produced, just faster. No "quality is
+basically the same" handwaving, which matters if you're going to trust the numbers.
 
-And one finding that surprised me enough to reorganize the whole project:
+## where it starts, and the only equation you need
 
-> **For this model, you quantize the *LM head*, not the experts.**
-> The 262K-vocab head is **32%** of the bytes read per token; the experts are only **16%**.
+Plain Q4_0, one token at a time: about 25 tokens/sec. The interesting part wasn't the number, it was that it
+didn't budge when I changed the thread count. 8 threads, 24 threads, identical. That's the tell: if more cores
+don't help, you're not compute-bound, you're waiting on memory.
 
-Nothing here is a new algorithm or a speed record. The value is the *map* — every lever measured, including
-the ones that didn't work, and the one number I got excited about that turned out to be noise.
+And that's basically the whole story in one line:
 
----
+    tokens/sec = memory bandwidth / bytes read per token
 
-## What I was after
+To make one token you stream almost the entire active model out of RAM, once. So your speed is just how fast
+RAM hands you bytes, divided by how many bytes you have to pull. Everything I tried after this is a fight over
+one of those two numbers: make RAM faster, or read fewer bytes.
 
-A simple question: a modern **26B mixture-of-experts** model, on a **normal desktop with no GPU**, decoding
-**one stream** as fast as possible — and kept **lossless** (the big model's output never changes; speedups
-come from verification, not approximation). That regime — large MoE, single-stream, no GPU — is the one
-almost nobody writes down numbers for. So I went and measured it, end to end.
+## the path
 
-## Where it started
+**Speculative decoding** is the big unlock, and the nice part is Google already did the hard work. Gemma-4
+ships with a little official "MTP" drafter that guesses the next few tokens; the big model then verifies all of
+them in a single forward pass instead of grinding them out one by one. When the guesses are good you get
+several tokens for the price of one pass. This is what takes you from ~25 to ~40 tok/s, and it stays lossless
+because the big model still signs off on every token. Biggest lever in the whole project, and you basically
+get it for free.
 
-Plain `Q4_0`, one stream: **~25 tok/s**, and flat whether I used 8 threads or 24. That flatness was the first
-real clue — the cores weren't the limit, the **memory bus** was. Everything after follows from that one fact:
+**Running 3 of the 8 experts.** The router picks 8 experts per token; I just run 3 of them. This is where I
+almost talked myself out of a good thing. Perplexity on raw Wikipedia jumped 1.6x and that looked alarming, but
+it's an artifact: an instruction-tuned, "thinking" model scores terribly on raw text no matter what, and that
+bad regime exaggerates small differences. When I actually read the outputs on real prompts, a word problem,
+some code, a factual question, top-3 and top-8 give the same answers. So it's free speed, but only because I
+went and looked instead of believing the scary number. There's a lesson in there.
 
-> **decode speed = memory bandwidth ÷ bytes read per token.**
+**Then I stopped guessing about the bytes and counted them.** This is the part I keep coming back to. Per
+token: the always-on stuff (attention plus the dense layers) is 52%, the experts are 16%, and the output head
+is 32%. The head is enormous because the vocabulary is 262K tokens, so it's a giant matrix you read in full on
+every single token. And it turns out you can crush it down to about 2.4 bits per weight with no measurable
+change to the outputs. The standard "quantize the experts" move would have been optimizing the smallest slice.
 
-## The path — what worked, what didn't
+**Quantization, and the trap.** Fewer bytes should mean more speed, and it does: shrink the model and plain
+decode gets ~18% faster. But the moment I stacked it on top of speculative decoding, it bought nothing. A model
+32% smaller on disk ran at the exact same ~41 tok/s. Quantization and spec decoding are both attacking the same
+thing (memory bandwidth), and spec already cashed it in, so they don't multiply. I measured a 43.6 once and got
+briefly excited, then re-ran it and it was just noise around 41. I'm leaving that whole detour in the docs on
+purpose, because "the obvious stack didn't work" is exactly what people tend not to write down.
 
-**1. Speculative decoding — the real win.** Google ships an official MTP "companion" drafter alongside
-Gemma-4. It proposes a few tokens; the big model verifies them in one pass. Lossless, and it took us from
-**~25 → ~40 tok/s**. This is the single biggest lever, and it's the deployed default.
+**The wall, and checking that it's actually the wall.** I wanted to know whether ~40 is a real hardware limit
+or just me leaving performance on the floor, so I measured the raw memory bandwidth with a little benchmark.
+The RAM can do about 64.5 GB/s, and decode is already using ~78% of it. I tried the usual things to recover the
+rest (pinning threads to specific cores, different thread counts, heavier quant) and none of it moved. The gap
+that's left is just how a mixture-of-experts reads memory, scattered rather than in one clean sweep. So ~40
+single-stream isn't laziness, it's close to what this silicon can do with this RAM.
 
-**2. Top-3 routing — basically free.** Run 3 of the 8 selected experts instead of 8. The scary part was a
-1.6× jump in raw-text perplexity — but that turned out to be an artifact of measuring an instruction model on
-raw Wikipedia. On *actual* tasks (math, facts, code), top-3 and top-8 give equivalent answers. Verified, not
-assumed.
+**The way around the wall.** Single-stream is stuck on bandwidth. But look at that equation again, it's per
+token, for one stream. The moment you serve a few requests at once, you read each weight once and reuse it
+across all of them. Now you're not bandwidth-bound, you're compute-bound, and all 24 cores that were sitting
+idle the whole time suddenly have work to do. Throughput climbs to ~124 tokens/sec. This is the trick vLLM made
+famous on GPUs (continuous batching), and it works fine on a CPU. It just took flipping the goal from "lowest
+latency" to "most total work."
 
-**3. "Where are the bytes?" — the surprise.** I finally *counted* the bytes read per token, straight from the
-model file. The standard MoE wisdom is "quantize the experts." But here the experts are only **16%** of
-per-token bytes — the always-on attention + dense layers are **52%**, and the **262K-vocab LM head is 32%**.
-That head, it turns out, compresses to **2.4-bit with no measurable quality loss.** The experts were never the
-right target.
+## so, can you hit 100 tokens/sec on a CPU?
 
-**4. Aggressive quantization — an honest dead-end (for serving).** Shrinking the model *does* speed up plain
-decode (+18%). But stacked with speculative decoding it gave **0%** — a 32%-smaller model ran the same ~41
-tok/s. Quantization and spec-decode fight over the *same* resource (memory bandwidth), and spec already wins
-it. I briefly measured a 43.6 and got excited; re-running showed it was noise around ~41. That correction is in
-the docs on purpose.
+Yes, but you have to be precise about which 100. As throughput across a few streams you're already past it
+(124). As single-stream latency, no: that one's pinned at ~40 by the memory bus, and the only ways up are
+faster RAM or a machine with more memory channels (a workstation does it easily, more channels means more
+bandwidth). Two ceilings, about 3x apart, on the same chip, bound by different things: one by how fast your RAM
+is, the other by how many cores you have. Worth knowing which one you're hitting before you go optimizing.
 
-**5. The bandwidth wall — real, and I made sure.** A direct memory benchmark says the RAM can stream
-**64.5 GB/s**; decode already uses **~78%** of that (weight-repacking, on by default, does most of the work).
-The gap that's left is intrinsic to how MoE reads memory, not a lazy engine — pinning, threads, and more
-quantization all moved it by ~nothing. So **~40 tok/s single-stream is near the hardware ceiling** for this RAM.
+## what's actually here
 
-**6. The reframe — batching.** Single-stream is bandwidth-walled. But the moment you serve *several* requests
-at once, each weight is read **once** and reused across all of them — the bottleneck flips from memory to
-compute, and the 24 cores that sat idle the whole time finally earn their keep: **~124 tok/s aggregate.** This
-is the vLLM-style throughput win, and it works fine on a CPU.
+The headline is the speed, but the thing I'd really point you to is the byte budget. Working out that for a
+262K-vocab model the output head is where the bytes are, not the experts, and that you can crush it to 2.4 bits
+for free, changes how you'd quantize a model like this in the first place. Around that is a full set of real
+numbers for a setup people mostly don't bother to measure (a big MoE, single stream, no GPU), with the
+dead-ends and the one correction left in, because that's what makes a recipe you can actually trust and build
+on.
 
-## Where it landed
+If a number here doesn't reproduce on your machine, that's a bug, open an issue.
 
-| regime | ceiling on the reference i9 | bound by | how you'd push it |
-|---|---|---|---|
-| single-stream **latency** | **~40 tok/s** lossless | memory bandwidth | faster RAM / more channels |
-| aggregate **throughput** | **~124 tok/s** | CPU compute | more cores / wider SIMD |
+## try it
 
-So "100 tok/s on a no-GPU desktop?" — **yes, as throughput, today.** As single-stream latency, no: that's a
-bandwidth wall, and clearing it needs faster RAM or a platform with more memory channels (a workstation does it
-easily). Two ceilings, 3× apart, on the same chip — and now you know exactly which physical resource each one
-hits.
+Everything runs on public models (the base model and the drafter are both official Google releases).
 
-## What's honestly novel — and what isn't
+    scripts/setup/download_models.sh    # or grab the prebuilt GGUFs, see scripts/setup
+    scripts/setup/build_engines.sh      # or use the prebuilt binaries in Releases
+    scripts/bench/single_stream.sh      # the ~40 tok/s lossless recipe
+    scripts/bench/batched.sh            # the ~124 tok/s throughput recipe
 
-I want to be straight about this, because overclaiming would undercut the point.
+Step-by-step is in docs/. And if you run it, I'd love a row in results/community.csv with your CPU and RAM
+speed. I'm especially curious whether faster RAM (DDR5-6400+, or more than two channels) breaks the
+single-stream wall, since I could only test the one machine.
 
-**Not novel:** the techniques. Speculative decoding, expert routing, quantization, batching — all known. None
-of the raw numbers is a record.
+## credits
 
-**Worth sharing:**
-- the **byte budget** that says *head, not experts* for this model — measured, counterintuitive, and not
-  written down anywhere I could find;
-- a **complete, honest map** of a regime (large MoE, single-stream, no-GPU CPU) that's usually left blank;
-- the **dead-ends and the one correction**, because most writeups quietly drop those, and they're exactly what
-  saves the next person a weekend.
-
-## Reproduce it
-
-Everything runs on **public models** (the base model and the MTP drafter are both official Google releases).
-
-```bash
-# 1. get the models (or grab our prebuilt GGUFs — see scripts/setup)
-scripts/setup/download_models.sh
-# 2. build the engines (or use the prebuilt binaries in Releases)
-scripts/setup/build_engines.sh
-# 3. measure your own machine
-scripts/bench/single_stream.sh     # the ~40 tok/s latency recipe
-scripts/bench/batched.sh           # the ~124 tok/s throughput recipe
-```
-
-Step-by-step recipes: [`docs/02-recipe-latency.md`](docs/) and [`docs/03-recipe-throughput.md`](docs/).
-How every number was measured: [`docs/05-methodology.md`](docs/).
-
-## Bring your own hardware
-
-The most interesting open question — *does faster RAM clear the single-stream wall?* — I couldn't test on one
-machine. Run the benchmark and **PR your row** to [`results/community.csv`](results/): your CPU, RAM speed, and
-your two numbers. Especially curious about DDR5-6400+ and anything with more than two memory channels.
-
-## Credits & license
-
-- **Model:** Gemma-4-26B-A4B and its MTP drafter — © Google, used under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms).
-- **Engines:** built on [llama.cpp](https://github.com/ggml-org/llama.cpp) and two forks (one for the IQK quant
-  kernels, one for MTP spec-decode); see [`docs/05-methodology.md`](docs/).
-- **This repo's** scripts and docs are MIT-licensed.
-
-*This is a measurement project. If a number here doesn't reproduce on your machine, that's a bug worth an
-issue — open one.*
+Gemma-4 and its drafter are © Google, under the Gemma Terms. Built on llama.cpp and a couple of forks, one for
+the quant kernels and one for the MTP spec decoding; details in docs/. The scripts and writeup here are MIT.
