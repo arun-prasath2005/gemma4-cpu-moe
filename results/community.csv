@@ -1,0 +1,2 @@
+cpu,ram,channels,gpu,single_stream_tok_s,batched_peak_tok_s,notes,who
+i9-13900K,DDR5-4800,2,none,40,124,reference machine,maintainer
