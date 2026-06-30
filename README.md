@@ -105,7 +105,7 @@ If a number here doesn't reproduce on your machine, that's a bug, open an issue.
 Everything runs on public models (the base model and the drafter are both official Google releases).
 
     scripts/setup/download_models.sh    # or grab the prebuilt GGUFs, see scripts/setup
-    scripts/setup/build_engines.sh      # or use the prebuilt binaries in Releases
+    scripts/setup/build_engines.sh      # clones + builds both forks, ~15 min
     scripts/bench/single_stream.sh      # the ~40 tok/s lossless recipe
     scripts/bench/batched.sh            # the ~124 tok/s throughput recipe
 
