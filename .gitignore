@@ -1,0 +1,27 @@
+# models & large artifacts (hosted on HuggingFace, never in git)
+*.gguf
+*.safetensors
+*.bin
+models/
+
+# built engines / binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.lib
+*.exp
+build/
+bin/
+
+# benchmark scratch
+*.log
+_*.txt
+*.tmp
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
