@@ -7,7 +7,7 @@ DEST="${1:-$(pwd)/models}"
 mkdir -p "$DEST"
 
 # The HF repo holding the benchmarked GGUFs. Override with HF_REPO=... if you mirror it.
-HF_REPO="${HF_REPO:-REPLACE_WITH_HF_REPO}"   # TODO: set after the HF upload (see docs/05)
+HF_REPO="${HF_REPO:-arunprasath/gemma4-cpu-moe-gguf}"
 
 command -v huggingface-cli >/dev/null 2>&1 || pip install -U "huggingface_hub[cli]"
 huggingface-cli download "$HF_REPO" \
