@@ -1,0 +1,5 @@
+# Keep shell + code LF so the Linux reproduction path runs no matter who commits from where.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.gguf binary
+*.png binary
