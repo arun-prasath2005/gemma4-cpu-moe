@@ -1,3 +1,5 @@
+
+
 # Running Gemma-4 26B at 124 tokens/sec on a CPU, no GPU
 
 I wanted to see how fast you can run a 26B mixture-of-experts model on a regular desktop, with no graphics
@@ -108,6 +110,7 @@ Everything runs on public models (the base model and the drafter are both offici
     scripts/setup/build_engines.sh      # clones + builds both forks, ~15 min
     scripts/bench/single_stream.sh      # the ~40 tok/s lossless recipe
     scripts/bench/batched.sh            # the ~124 tok/s throughput recipe
+    bash scripts/reproduce.sh           # or run this one-liner to fetch, build, and bench automatically
 
 Step-by-step is in docs/. And if you run it, I'd love a row in results/community.csv with your CPU and RAM
 speed. I'm especially curious whether faster RAM (DDR5-6400+, or more than two channels) breaks the
