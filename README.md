@@ -1,6 +1,6 @@
 # Running Gemma-4 26B at 124 tokens/sec on a CPU, no GPU
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22762963.svg)](https://doi.org/10.5281/zenodo.22762963)
+[![DOI 10.5281/zenodo.22762963](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.22762963-1682d4)](https://doi.org/10.5281/zenodo.22762963)
 
 > The full write-up of this build, with the byte budget and the dead ends: [apeg.dev/writing/running-gemma4-26b-on-a-cpu](https://apeg.dev/writing/running-gemma4-26b-on-a-cpu/). What self-hosting an LLM actually requires, beyond the hardware: [apeg.dev/writing/self-hosted-llm-without-a-gpu](https://apeg.dev/writing/self-hosted-llm-without-a-gpu/). By [Arun Prasath E G](https://apeg.dev/about/).
 
