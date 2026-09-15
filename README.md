@@ -1,5 +1,7 @@
 # Running Gemma-4 26B at 124 tokens/sec on a CPU, no GPU
 
+> The full write-up of this build, with the byte budget and the dead ends: [apeg.dev/writing/running-gemma4-26b-on-a-cpu](https://apeg.dev/writing/running-gemma4-26b-on-a-cpu/). What self-hosting an LLM actually requires, beyond the hardware: [apeg.dev/writing/self-hosted-llm-without-a-gpu](https://apeg.dev/writing/self-hosted-llm-without-a-gpu/). By [Arun Prasath E G](https://apeg.dev/about/).
+
 I wanted to see how fast you can run a 26B mixture-of-experts model on a regular desktop, with no graphics
 card at all. Just the CPU: an i9-13900K, 64GB of ordinary DDR5, the kind of box a lot of people already have
 sitting around.
