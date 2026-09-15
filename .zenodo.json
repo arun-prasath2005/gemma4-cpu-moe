@@ -1,0 +1,26 @@
+{
+  "title": "Running Gemma-4 26B at 124 tokens/sec on a CPU, no GPU: recipe, byte budget, roofline",
+  "description": "<p>Measured recipe for running the Gemma-4 26B mixture-of-experts model on a desktop CPU with no graphics card (i9-13900K, 64 GB DDR5-4800): about 40 tokens per second single-stream with output identical to plain Q4_0, and about 124 tokens per second aggregate at batch 32. Includes the per-token byte budget (the output head is 32 percent of bytes read, the experts 16 percent), the measured memory bandwidth and roofline, the quantization recipe, the dead ends, and scripts that rebuild two pinned llama.cpp forks and reproduce both numbers.</p><p>Write-up: <a href=\"https://apeg.dev/writing/running-gemma4-26b-on-a-cpu/\">https://apeg.dev/writing/running-gemma4-26b-on-a-cpu/</a></p>",
+  "creators": [
+    { "name": "E G, Arun Prasath", "affiliation": "apeg.dev" }
+  ],
+  "license": "MIT",
+  "upload_type": "software",
+  "access_right": "open",
+  "language": "eng",
+  "keywords": [
+    "CPU inference",
+    "mixture of experts",
+    "Gemma-4",
+    "llama.cpp",
+    "speculative decoding",
+    "quantization",
+    "memory bandwidth",
+    "self-hosted LLM",
+    "local LLM"
+  ],
+  "related_identifiers": [
+    { "identifier": "https://apeg.dev/writing/running-gemma4-26b-on-a-cpu/", "relation": "isSupplementTo", "resource_type": "publication-article", "scheme": "url" },
+    { "identifier": "https://github.com/arun-prasath2005/gemma4-cpu-moe", "relation": "isIdenticalTo", "scheme": "url" }
+  ]
+}
