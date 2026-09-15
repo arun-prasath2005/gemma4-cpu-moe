@@ -1,5 +1,7 @@
 # Running Gemma-4 26B at 124 tokens/sec on a CPU, no GPU
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22762963.svg)](https://doi.org/10.5281/zenodo.22762963)
+
 > The full write-up of this build, with the byte budget and the dead ends: [apeg.dev/writing/running-gemma4-26b-on-a-cpu](https://apeg.dev/writing/running-gemma4-26b-on-a-cpu/). What self-hosting an LLM actually requires, beyond the hardware: [apeg.dev/writing/self-hosted-llm-without-a-gpu](https://apeg.dev/writing/self-hosted-llm-without-a-gpu/). By [Arun Prasath E G](https://apeg.dev/about/).
 
 I wanted to see how fast you can run a 26B mixture-of-experts model on a regular desktop, with no graphics
@@ -119,3 +121,13 @@ single-stream wall, since I could only test the one machine.
 
 Gemma-4 and its drafter are © Google, under the Gemma Terms. Built on llama.cpp and a couple of forks, one for
 the quant kernels and one for the MTP spec decoding; details in docs/. The scripts and writeup here are MIT.
+
+## cite
+
+Archived on Zenodo, so the numbers have a fixed record: [10.5281/zenodo.22762963](https://doi.org/10.5281/zenodo.22762963)
+(this release) and [10.5281/zenodo.22762962](https://doi.org/10.5281/zenodo.22762962) (always the latest release).
+
+    Arun Prasath E G. Running Gemma-4 26B at 124 tokens/sec on a CPU, no GPU: recipe, byte budget, roofline.
+    Version 1.0, September 2026. https://doi.org/10.5281/zenodo.22762963
+
+GitHub also reads the CITATION.cff in this repo, so the "Cite this repository" button on the right gives the same thing.
