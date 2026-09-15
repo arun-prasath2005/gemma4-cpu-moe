@@ -6,6 +6,7 @@ authors:
   - family-names: "E G"
     given-names: "Arun Prasath"
     affiliation: "apeg.dev"
+    orcid: "https://orcid.org/0009-0000-7798-0463"
     website: "https://apeg.dev/about/"
 license: MIT
 repository-code: "https://github.com/arun-prasath2005/gemma4-cpu-moe"
